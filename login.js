@@ -50,6 +50,8 @@ async function loginWithAccount(user, pass) {
   });
   
   let page;
+  let result = { user, success: false, message: '' };
+  
   try {
     page = await browser.newPage();
     page.setDefaultTimeout(30000);
@@ -82,35 +84,54 @@ async function loginWithAccount(user, pass) {
     
     if (pageContent.includes('exclusive owner') || pageContent.includes(user)) {
       console.log(`✅ ${user} - 登录成功`);
-      await sendTelegram(`✅ ${user} 登录成功`);
+      result.success = true;
+      result.message = `✅ ${user} 登录成功`;
     } else {
       console.log(`❌ ${user} - 登录失败`);
-      await sendTelegram(`❌ ${user} 登录失败`);
+      result.message = `❌ ${user} 登录失败`;
     }
     
   } catch (e) {
     console.log(`❌ ${user} - 登录异常: ${e.message}`);
-    await sendTelegram(`❌ ${user} 登录异常: ${e.message}`);
+    result.message = `❌ ${user} 登录异常: ${e.message}`;
   } finally {
     if (page) await page.close();
     await browser.close();
   }
+  
+  return result;
 }
 
 async function main() {
   console.log(`🔍 发现 ${accountList.length} 个账号需要登录`);
   
+  const results = [];
+  
   for (let i = 0; i < accountList.length; i++) {
     const { user, pass } = accountList[i];
     console.log(`\n📋 处理第 ${i + 1}/${accountList.length} 个账号: ${user}`);
     
-    await loginWithAccount(user, pass);
+    const result = await loginWithAccount(user, pass);
+    results.push(result);
     
+    // 如果不是最后一个账号，等待一下再处理下一个
     if (i < accountList.length - 1) {
       console.log('⏳ 等待3秒后处理下一个账号...');
       await new Promise(resolve => setTimeout(resolve, 3000));
     }
   }
+  
+  // 汇总所有结果并发送一条消息
+  const successCount = results.filter(r => r.success).length;
+  const totalCount = results.length;
+  
+  let summaryMessage = `📊 登录汇总: ${successCount}/${totalCount} 个账号成功\n\n`;
+  
+  results.forEach(result => {
+    summaryMessage += `${result.message}\n`;
+  });
+  
+  await sendTelegram(summaryMessage);
   
   console.log('\n✅ 所有账号处理完成！');
 }
